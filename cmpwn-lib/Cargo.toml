@@ -1,0 +1,32 @@
+[package]
+name = "cmpwn-lib"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+base64 = "0.12"
+encoding_rs = "0.8"
+hex = "0.4"
+hmac = "0.8"
+rand = "0.7"
+rsa = "0.3"
+rusqlite = "0.23"
+sha-1 = "0.9"
+sha2 = "0.9"
+futures = "0.3"
+
+[dependencies.migrant_lib]
+features = ["d-sqlite"]
+version = "0.29"
+
+[dependencies.quick-xml]
+features = ["serialize"]
+version = "0.18"
+
+[dependencies.reqwest]
+features = ["blocking", "cookies"]
+version = "0.10"
+
+[dependencies.serde]
+features = ["derive"]
+version = "1.0"

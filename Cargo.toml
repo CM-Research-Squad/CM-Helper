@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "cmpwn-cli",
+    "cmpwn-lib",
+    "cmpwn-gtk"
+]

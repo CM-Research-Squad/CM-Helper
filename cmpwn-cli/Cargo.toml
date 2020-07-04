@@ -1,0 +1,23 @@
+[package]
+name = "cmpwn-cli"
+version = "0.1.0"
+edition = "2018"
+
+[dependencies]
+cmpwn-lib = { path = "../cmpwn-lib" }
+rand = "0.7"
+structopt = "0.3"
+dialoguer = "0.6"
+rsa = "0.3"
+base64 = "0.12"
+num-bigint = "0.2"
+sha-1 = "0.9"
+prettytable-rs = "0.8"
+
+[dependencies.tokio]
+version = "0.2"
+features = ["rt-threaded", "macros"]
+
+[dependencies.yasna]
+features = ["num-bigint"]
+version = "0.3"
