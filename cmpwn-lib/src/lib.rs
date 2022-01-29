@@ -4,6 +4,7 @@ use sha2::{Sha256, Digest};
 use sha1::Sha1;
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
+use std::ops::Deref;
 use serde::de::DeserializeOwned;
 use quick_xml::de::from_str;
 use std::error::Error;
@@ -19,6 +20,8 @@ mod xml;
 use utils::*;
 use error::*;
 pub use xml::*;
+
+// TODO: Implement certificate key pinning.
 
 trait XmlResult {
     fn result(&self, url: &str) -> Result<(), FormError>;
@@ -250,8 +253,7 @@ pub fn verify_application(client: &Client, user_id: &str, device_id: &str, pin_c
     }
 }
 
-pub fn enroll_application(client: &Client, device_id: &str, device_name: &str, otp_code: &str, otp_hidden: &str, server_key: &[u8], pin: &str, client_key: &[u8]) -> impl Future<Output = Result<EnrolmentResult, Box<dyn Error + Send + Sync>>> {
-    let alea = random();
+pub fn enroll_application(client: &Client, device_id: &str, device_name: &str, alea: &str, otp_code: &str, otp_hidden: &str, server_key: &[u8], pin: &str, client_key: &[u8]) -> impl Future<Output = Result<EnrolmentResult, Box<dyn Error + Send + Sync>>> {
     let pin = pin.to_string() + "::" + &alea;
     let server_key = match RSAPublicKey::from_pkcs8(server_key) {
         Ok(v) => v,
@@ -282,7 +284,7 @@ pub fn enroll_application(client: &Client, device_id: &str, device_name: &str, o
             form.insert("pin", encrypted_pin_data);
             // FCM token.
             //form.insert("pushId", push_id.to_string());
-            form.insert("alea", alea);
+            form.insert("alea", alea.to_string());
             form.insert("enrolmentsToDelete", "".to_string());
             form.insert("clientPublicKey", client_public_key.to_string());
             form.insert("clientPublicKeyHash", client_public_key_hash.to_string());
@@ -340,7 +342,7 @@ pub fn deliver_enrolment_code(client: &Client, device_id: &str, device_name: &st
     }
 }
 
-pub fn exists_enroll(client: &Client, device_id: &str, alea: &str) -> impl Future<Output = Result<ExistsEnrolmentResult, Box<dyn Error + Send + Sync>>> {
+pub fn exists_enroll(client: &Client, device_id: &str, alea: Option<&str>) -> impl Future<Output = Result<ExistsEnrolmentResult, Box<dyn Error + Send + Sync>>> {
     // Enrolling is the act of adding a new
     let resp = client
         .post("https://mobile.creditmutuel.fr/cmmabn/fr/SOSD_PUSH_ExistsEnrolment.html")
@@ -350,7 +352,7 @@ pub fn exists_enroll(client: &Client, device_id: &str, alea: &str) -> impl Futur
             form.insert("applicationCode", "CM".to_string());
             form.insert("deviceId", device_id.to_string());
             form.insert("platform", "ANDROID".to_string());
-            form.insert("alea", alea.to_string());
+            form.insert("alea", alea.unwrap_or("-1").to_string());
             form.insert("_media", "AN".to_string());
             form
         })
@@ -366,7 +368,7 @@ pub fn exists_enroll(client: &Client, device_id: &str, alea: &str) -> impl Futur
         } else {
             println!("{:?}", resp.status());
             println!("{:?}", resp.text().await?);
-            return Err::<ExistsEnrolmentResult, Box<dyn Error + Send + Sync>>(Box::new(MyError::new("Request failed")));
+            return Err::<_, Box<dyn Error + Send + Sync>>(Box::new(MyError::new("Request failed")));
         }
     }
 }

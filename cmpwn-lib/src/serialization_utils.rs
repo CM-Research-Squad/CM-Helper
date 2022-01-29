@@ -1,5 +1,6 @@
 use hex::{FromHex, ToHex};
 use serde::{Serializer, Deserialize, Deserializer};
+use chrono::NaiveDate;
 
 /// Serializes `buffer` to a lowercase hex string.
 ///
@@ -31,4 +32,14 @@ pub fn deser_base64<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
     use serde::de::Error;
     String::deserialize(deserializer)
         .and_then(|string| base64::decode(&string).map_err(|err| Error::custom(err.to_string())))
+}
+
+/// Deserializes a naive date in the YYYYmmdd format.
+pub fn deser_naive_date<'de, D>(deserializer: D) -> Result<NaiveDate, D::Error>
+    where D: Deserializer<'de>
+{
+    use serde::de::Error;
+    let s = String::deserialize(deserializer)?;
+    NaiveDate::parse_from_str(&s, "%Y%m%d")
+        .map_err(|err| Error::custom(err.to_string()))
 }

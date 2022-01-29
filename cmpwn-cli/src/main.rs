@@ -39,19 +39,17 @@ async fn main() {
                 .unwrap();
             let response = login(&client, &settings.get_device_id().unwrap(), &username, &password).await.unwrap();
 
-            if let Some(v) = settings.get_user_info(&username, false).unwrap() {
-                v
-            } else {
-                let alea: String = thread_rng()
-                    .sample_iter(&Uniform::new_inclusive(0, 9))
-                    .map(|v| char::from(v + b'0'))
-                    .take(40)
-                    .collect();
+            let alea = settings.get_user_info(&username, false).unwrap()
+                .map(|v| v.alea)
+                .unwrap_or_else(||
+                    thread_rng()
+                        .sample_iter(&Uniform::new_inclusive(0, 9))
+                        .map(|v| char::from(v + b'0'))
+                        .take(40)
+                        .collect());
 
-                let user_info = enroll(&client, &response.userid, &settings.get_device_id().unwrap(), "My CLI Tool", &alea).await.unwrap();
-                settings.create_user_info(&username, &user_info).unwrap();
-                user_info
-            };
+            let user_info = enroll(&client, &response.userid, &settings.get_device_id().unwrap(), "My CLI Tool", &alea).await.unwrap();
+            settings.create_user_info(&username, &user_info).unwrap();
         },
         Args::SecondFA { username } => {
             if let Some(user_info) = settings.get_user_info(&username, true).unwrap() {
@@ -67,19 +65,19 @@ async fn main() {
             let webid = if let Some(account_name) = account_name {
                 // TODO: print pretty error if account is not found. Maybe
                 // fallback to the selector?
-                info.liste_compte.unwrap().compte.iter().find(|v| v.int == account_name).unwrap().webid.clone()
+                info.liste_compte.compte.iter().find(|v| v.int == account_name).unwrap().webid.clone()
             } else {
                 let mut select = dialoguer::Select::new();
-                for compte in &info.liste_compte.as_ref().unwrap().compte {
+                for compte in &info.liste_compte.compte {
                     select.item(format!("{}: {}", compte.int, compte.solde));
                 }
                 let compte = select.interact().unwrap();
-                info.liste_compte.unwrap().compte[compte].webid.clone()
+                info.liste_compte.compte[compte].webid.clone()
             };
             let act_info = get_account_info(&client, &webid).await.unwrap();
             let mut table = Table::new();
             table.set_titles(row!["Date", "Libelé", "Montant"]);
-            for ligmvt in &act_info.tabmvt.as_ref().unwrap().ligmvt {
+            for ligmvt in &act_info.tabmvt.ligmvt {
                 table.add_row(row![ligmvt.dat, ligmvt.lib, ligmvt.mnt]);
             }
             let format = prettytable::format::FormatBuilder::new()
@@ -134,11 +132,13 @@ async fn enroll(client: &Client, user_id: &str, device_id: &str, device_name: &s
     let generate_client_key_hnd = std::thread::spawn(move || {
         RSAPrivateKey::new(&mut thread_rng(), 2048).unwrap()
     });
-    let enrolment = exists_enroll(client, device_id, alea).await.unwrap();
+
+    let enrolment = exists_enroll(client, device_id, Some(alea)).await.unwrap();
     if enrolment.is_enrolled {
         println!("Weird, we're already enrolled.");
         return None
     }
+
     let otp_availability = enrolment.otp_availability_result.unwrap();
     if otp_availability.availability.to_lowercase() == "available" && otp_availability.delivery.method == "SMS" {
         // Send the second factor
@@ -146,7 +146,6 @@ async fn enroll(client: &Client, user_id: &str, device_id: &str, device_name: &s
 
         println!("{}", delivery.delivering.desc);
 
-        let server_key = delivery.server_public_key;
 
         let code = dialoguer::Input::<String>::new()
             .with_prompt("Confirmation code")
@@ -161,7 +160,16 @@ async fn enroll(client: &Client, user_id: &str, device_id: &str, device_name: &s
         let client_key = generate_client_key_hnd.join().unwrap();
         let client_key_data = key_to_pkcs8(&*client_key);
 
-        let result = enroll_application(&client, device_id, device_name, &code, &delivery.delivering.input_hidden.value, &server_key, &pin, &client_key_data).await.unwrap();
+        let result = enroll_application(
+            &client,
+            device_id,
+            device_name,
+            alea,
+            &code,
+            &delivery.delivering.input_hidden.value,
+            &delivery.server_public_key,
+            &pin,
+            &client_key_data).await.unwrap();
 
         let secret_key = client_key.decrypt(PaddingScheme::new_oaep::<Sha1>(), &result.secret_key).unwrap();
         let secret_key = base64::decode(secret_key).unwrap();
@@ -173,7 +181,8 @@ async fn enroll(client: &Client, user_id: &str, device_id: &str, device_name: &s
         Some(settings::UserInfo {
             user_id: user_id.to_string(),
             secret_key,
-            validation_counter: 0
+            validation_counter: 0,
+            alea: alea.to_string()
         })
     } else {
         println!("otp_availability unexpected: {:#?}", otp_availability);

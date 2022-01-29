@@ -1,5 +1,7 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use serde::de::{Error, Unexpected};
 use crate::serialization_utils::*;
+use chrono::NaiveDate;
 
 macro_rules! make_result {
     ($t:ident) => {
@@ -22,7 +24,8 @@ macro_rules! make_result {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct LigMvt {
-    pub dat: String,
+    #[serde(deserialize_with = "deser_naive_date")]
+    pub dat: NaiveDate,
     pub lib: String,
     pub lib2: String,
     pub lib3: String,
@@ -33,7 +36,7 @@ pub struct LigMvt {
     pub ty: String
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct TabMvt {
     pub ligmvt: Vec<LigMvt>
 }
@@ -47,7 +50,8 @@ pub struct AccountInformationResponse {
     pub detail_msg_retour: String,
     #[serde(default)]
     pub date_msg: String,
-    pub tabmvt: Option<TabMvt>,
+    #[serde(default)]
+    pub tabmvt: TabMvt,
 }
 
 make_result!(AccountInformationResponse);
@@ -92,7 +96,7 @@ pub struct Compte {
     pub is_favorite: u32
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 pub struct ListeCompte {
     pub compte: Vec<Compte>
 }
@@ -106,10 +110,26 @@ pub struct UserInformationResponse {
     pub detail_msg_retour: String,
     #[serde(default)]
     pub date_msg: String,
-    #[serde(default)]
+    #[serde(deserialize_with = "deserialize_code_retour_cpl")]
     pub code_retour_cpl: u32,
     pub category_list: Option<CategoryList>,
-    pub liste_compte: Option<ListeCompte>,
+    #[serde(default)]
+    pub liste_compte: ListeCompte,
+}
+
+fn deserialize_code_retour_cpl<'de, D>(de: D) -> Result<u32, D::Error>
+where
+    D: Deserializer<'de>
+{
+    let s = String::deserialize(de)?;
+    if s == "" {
+        return Ok(0);
+    }
+
+    match s.parse() {
+        Ok(v) => Ok(v),
+        Err(err) => Err(D::Error::invalid_value(Unexpected::Str(&s), &"Expected a number")),
+    }
 }
 
 make_result!(UserInformationResponse);
@@ -431,3 +451,15 @@ pub struct TransactionValidationResponse {
 
 #[derive(Debug, Default, Clone, Deserialize)]
 pub struct TransactionValidationResult;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::XmlResultExtension;
+
+    #[test]
+    fn regression_test_empty_code_retour_cpl() {
+        let xml = r#"<?xml version=\"1.0\" encoding=\"UTF-8\"?><root><code_retour>0000</code_retour><msg_retour /><date_msg>20220101010101</date_msg><code_retour_cpl /><category_list><category><name>Comptes courants</name><code>depot</code></category><category><name>Épargne</name><code>saving</code></category></category_list><liste_compte></liste_compte></root>"#;
+        let doc = UserInformationResponse::from_data(&xml, "/cmmabn/fr/banque/PRC2.html").unwrap();
+    }
+}

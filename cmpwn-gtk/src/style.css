@@ -1,0 +1,15 @@
+.act_overview {
+    background-color: white;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.act_line {
+    padding: 2px;
+}
+
+.act_line:not(:last-child) {
+    border-bottom-width: 1px;
+    border-bottom-color: lightgrey;
+    border-bottom-style: solid;
+}

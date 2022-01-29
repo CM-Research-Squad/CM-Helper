@@ -9,6 +9,7 @@ pub struct UserInfo {
     pub user_id: String,
     pub secret_key: Vec<u8>,
     pub validation_counter: u32,
+    pub alea: String,
 }
 
 const USERINFO_PATH: &str = "userinfo.db";
@@ -34,7 +35,15 @@ pub fn get() -> Result<Settings, Box<dyn Error + Send>> {
             DROP TABLE kvstore;
             DROP TABLE user_info;
             "#)
-            .boxed()
+            .boxed(),
+        migrant_lib::EmbeddedMigration::with_tag("add-alea")
+            .up(r#"
+            ALTER TABLE user_info ADD alea TEXT;
+            "#)
+            .down(r#"
+            -- TODO: ALTER TABLE user_info DROP COLUMN alea DEFAULT '';
+            "#)
+            .boxed(),
     ]).map_err(box_err)?;
     config = config.reload().map_err(box_err)?;
 
@@ -81,6 +90,7 @@ impl Settings {
                 user_id: row.get("user_id")?,
                 secret_key: row.get("secret_key")?,
                 validation_counter: row.get("counter")?,
+                alea: row.get("alea")?,
             })
         }) {
             Ok(v) => {
@@ -95,8 +105,8 @@ impl Settings {
     }
 
     pub fn create_user_info(&self, username: &str, user_info: &UserInfo) -> Result<(), Box<dyn Error + Send + Sync>> {
-        self.conn.execute(r#"INSERT INTO user_info (username, user_id, secret_key, counter) VALUES (?1, ?2, ?3, 0)"#, params![
-            username, user_info.user_id, &user_info.secret_key
+        self.conn.execute(r#"INSERT INTO user_info (username, user_id, secret_key, counter, alea) VALUES (?1, ?2, ?3, 0, ?4)"#, params![
+            username, user_info.user_id, &user_info.secret_key, &user_info.alea
         ])?;
         Ok(())
     }

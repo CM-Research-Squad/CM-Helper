@@ -79,14 +79,6 @@ pub fn transaction_data_to_string(transaction_data: TransactionInfo) -> String {
     }).collect::<Vec<String>>().join("$$")
 }
 
-pub fn random() -> String {
-    thread_rng()
-        .sample_iter(&Uniform::new_inclusive(0, 9))
-        .map(|v| char::from(v + b'0'))
-        .take(40)
-        .collect()
-}
-
 pub fn derive_key(secret_key: &[u8], pin_code: Option<&str>, salt: &str) -> Vec<u8> {
     let mut key_source = Vec::from(&b"\x01\x00\x00\x00"[..]);
     if pin_code.is_some() {
